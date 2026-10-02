@@ -1,6 +1,7 @@
 import os
 import pandas as pd
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, Table, MetaData
+from sqlalchemy.dialects.postgresql import insert
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -15,9 +16,16 @@ def get_engine():
 
 def carregar_serie(df: pd.DataFrame):
     engine = get_engine()
-    df.to_sql(
-        "series_temporais",
-        con=engine,
-        if_exists="append",
-        index=False,
-    )
+    metadata = MetaData()
+    tabela = Table("series_temporais", metadata, autoload_with=engine)
+
+    registros = df.to_dict(orient="records")
+
+    if not registros:
+        return
+
+    stmt = insert(tabela).values(registros)
+    stmt = stmt.on_conflict_do_nothing(index_elements=["indicador_id", "data"])
+
+    with engine.begin() as conn:
+        conn.execute(stmt)
